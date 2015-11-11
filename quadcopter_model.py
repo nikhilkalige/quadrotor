@@ -178,7 +178,7 @@ class Quadcopter(object):
 
         # Update the system state
         [self.state['position'], self.state['velocity'],
-         self.state['orientation'], self.state['ang_velocity']] = np.split(output, 4)
+         self.state['orientation'], self.state['ang_velocity']] = np.split(output[len(output) - 1], 4)
 
     def _integrator(self, state, t, coll_thrust, desired_angular_acc):
         """Callback function for scipy.integrate.odeint.
