@@ -29,6 +29,8 @@ class Quadcopter(object):
             'velocity': np.zeros(3),
             # Euler angles [phi, theta, psi]
             'orientation': np.zeros(3),
+            # Angular velocity [p, q, r]
+            'ang_velocity': np.zeros(3)
         }
 
     def motor_thrust(self, moments, coll_thrust):
@@ -152,7 +154,7 @@ class Quadcopter(object):
     def interia_matrix(self):
         return np.diag(self.config.inertia)
 
-    def update_state(self, coll_thrust, desired_angular_acc):
+    def update_state(self, coll_thrust, desired_angular_acc, t):
         """Update the current state of the system. It runs the model and updates
         its state to self._dt seconds.
 
@@ -163,10 +165,44 @@ class Quadcopter(object):
         desired_acc : numpy.array
             The desired angular acceleration that the system should achieve.
             This should be of form [dp/dt, dq/dt, dr/dt]
+        t: float
+            Runtime of the integrator
         """
+        ts = np.arange(0, t, self._dt)
+        state = np.concatenate((self.state['position'], self.state['velocity'],
+                                self.state['orientation'], self.state['ang_velocity']))
+        output = odeint(self._integrator, state, ts, args=(coll_thrust, desired_angular_acc))
 
+        # Update the system state
+        [self.state['position'], self.state['velocity'],
+         self.state['orientation'], self.state['ang_velocity']] = np.split(output, 4)
+
+    @staticmethod
+    def _integrator(state, t, coll_thrust, desired_angular_acc):
+        """Callback function for scipy.integrate.odeint.
+
+        Parameters
+        ----------
+        state : numpy.array
+            Entire state of the system. The contents of the array is
+            [x, y, z, xdot, ydot, zdot, phi, theta, psi, p, q, r]
+        t : float
+            Time
+
+        Returns
+        -------
+        numpy.array
+            The derivatives of the input state.
+            [xdot, ydot, zdot, xddot, yddot, zddot, phidot, thetadot, psidot, pdot, qdot, rdot]
+        """
+        # Position inertial frame [x, y, z]
+        pos = state[:3]
+        # Velocity inertial frame [x, y, z]
+        velocity = state[3:6]
+        euler = state[6:9]
         # Angular velocity omega = [p, q, r]
-        omega = np.zeros(3)
+        omega = state[9:12]
+
         # Derivative of euler angles [dphi/dt, dtheta/dt, dpsi/dt]
         euler_dot = np.zeros(3)
 
@@ -177,6 +213,9 @@ class Quadcopter(object):
         acc = self.acceleration(thrusts)
 
         omega_dot = self.angular_acceleration(omega, thrusts)
+        euler_dot = self.angular_velocity_to_dt_eulerangles(omega)
 
-        dtstate = []
+        # [velocity : acc : euler_dot : omega_dot]
+        return np.concatenate((velocity, acc, euler_dot, omega_dot))
+
 
