@@ -49,11 +49,11 @@ class Quadcopter(object):
         """
         [mp, mq, mr] = moments
         thrust = np.zeros(4)
-        temp1add = coll_thrust + mr / self.config.thrustToDrag
-        temp1sub = coll_thrust - mr / self.config.thrustToDrag
+        temp1add = coll_thrust + mr / self.config['thrustToDrag']
+        temp1sub = coll_thrust - mr / self.config['thrustToDrag']
 
-        temp2p = 2 * mp / self.config.length
-        temp2q = 2 * mq / self.config.length
+        temp2p = 2 * mp / self.config['length']
+        temp2q = 2 * mq / self.config['length']
 
         thrust[0] = temp1add - temp2q
         thrust[1] = temp1sub + temp2p
@@ -62,29 +62,29 @@ class Quadcopter(object):
 
         return thrust / 4.0
 
-    def dt_eulerangles_to_angular_velocity(self, dtEuler):
+    def dt_eulerangles_to_angular_velocity(self, dtEuler, euler_angles):
         """Convert the Euler angle derivatives to angular velocity
         dtEuler = np.array([dphi/dt, dtheta/dt, dpsi/dt])
         """
-        return np.dot(self.angular_rotation_matrix(), dtEuler)
+        return np.dot(self.angular_rotation_matrix(euler_angles), dtEuler)
 
-    def acceleration(self, thrusts):
+    def acceleration(self, thrusts, euler_angles):
         """Compute the acceleration in inertial reference frame
         thrust = np.array([Motor1, .... Motor4])
         """
-        force_z_body = np.sum(thrusts) / self.config.mass
-        rotation_matrix = self.rotation_matrix()
+        force_z_body = np.sum(thrusts) / self.config['mass']
+        rotation_matrix = self.rotation_matrix(euler_angles)
 
-        return np.dot(rotation_matrix, force_z_body) - np.array([0, 0, self.config.gravity])
+        return np.dot(rotation_matrix, force_z_body) - np.array([0, 0, self.config['gravity']])
 
     def angular_acceleration(self, omega, thrust):
         """Compute the angular acceleration in body frame
         omega = angular velocity :- np.array([p, q, r])
         """
         [t1, t2, t3, t4] = thrust
-        thrust_matrix = np.array([self.config.length * (t2 - t4),
-                                  self.config.length * (t3 - t1),
-                                  self.config.thrustToDrag * (t1 - t2 + t3 - t4)])
+        thrust_matrix = np.array([self.config['length'] * (t2 - t4),
+                                  self.config['length'] * (t3 - t1),
+                                  self.config['thrustToDrag'] * (t1 - t2 + t3 - t4)])
 
         inverse_inertia = np.linalg.inv(self.inertia_matrix)
         part1 = np.dot(inverse_inertia, thrust_matrix)
@@ -93,11 +93,11 @@ class Quadcopter(object):
         cross = np.cross(part2, part3)
         return part1 - cross
 
-    def angular_velocity_to_dt_eulerangles(self, omega):
+    def angular_velocity_to_dt_eulerangles(self, omega, euler_angles):
         """Compute Euler angles from angular velocity
         omega = angular velocity :- np.array([p, q, r])
         """
-        rotation_matrix = np.linalg.inv(self.angular_rotation_matrix())
+        rotation_matrix = np.linalg.inv(self.angular_rotation_matrix(euler_angles))
         return np.dot(rotation_matrix, omega)
 
     def moments(self, desired_acc, angular_vel):
@@ -130,7 +130,7 @@ class Quadcopter(object):
         Use inverse of the matrix to convert from angular velocity to euler rates
         """
         [phi, theta, psi] = euler_angles
-        m = np.array([[1, 0,            -np.pi(theta)],
+        m = np.array([[1, 0,            -np.sin(theta)],
                       [0, np.cos(phi),  np.cos(theta) * np.sin(phi)],
                       [0, -np.sin(psi), np.cos(theta) * np.cos(phi)]
                       ])
@@ -151,8 +151,8 @@ class Quadcopter(object):
         return m
 
     @property
-    def interia_matrix(self):
-        return np.diag(self.config.inertia)
+    def inertia_matrix(self):
+        return np.diag(self.config['inertia'])
 
     def update_state(self, coll_thrust, desired_angular_acc, t):
         """Update the current state of the system. It runs the model and updates
@@ -166,8 +166,11 @@ class Quadcopter(object):
             The desired angular acceleration that the system should achieve.
             This should be of form [dp/dt, dq/dt, dr/dt]
         t: float
-            Runtime of the integrator
+            Runtime of the integrator. It should atleast twice the value of self._dt
         """
+        if t < (2 * self._dt):
+            raise ValueError('t=%s is less than (2 * self._dt)=%s' % (t, self._dt))
+
         ts = np.arange(0, t, self._dt)
         state = np.concatenate((self.state['position'], self.state['velocity'],
                                 self.state['orientation'], self.state['ang_velocity']))
@@ -177,8 +180,7 @@ class Quadcopter(object):
         [self.state['position'], self.state['velocity'],
          self.state['orientation'], self.state['ang_velocity']] = np.split(output, 4)
 
-    @staticmethod
-    def _integrator(state, t, coll_thrust, desired_angular_acc):
+    def _integrator(self, state, t, coll_thrust, desired_angular_acc):
         """Callback function for scipy.integrate.odeint.
 
         Parameters
@@ -206,16 +208,14 @@ class Quadcopter(object):
         # Derivative of euler angles [dphi/dt, dtheta/dt, dpsi/dt]
         euler_dot = np.zeros(3)
 
-        omega = self.dt_eulerangles_to_angular_velocity(euler_dot)
+        omega = self.dt_eulerangles_to_angular_velocity(euler_dot, euler)
         moments = self.moments(desired_angular_acc, omega)
         thrusts = self.motor_thrust(moments, coll_thrust)
         # Acceleration in inertial frame
-        acc = self.acceleration(thrusts)
+        acc = self.acceleration(thrusts, euler)
 
         omega_dot = self.angular_acceleration(omega, thrusts)
-        euler_dot = self.angular_velocity_to_dt_eulerangles(omega)
+        euler_dot = self.angular_velocity_to_dt_eulerangles(omega, euler)
 
         # [velocity : acc : euler_dot : omega_dot]
         return np.concatenate((velocity, acc, euler_dot, omega_dot))
-
-
