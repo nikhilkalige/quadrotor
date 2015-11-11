@@ -74,8 +74,8 @@ class Quadcopter(object):
         """
         force_z_body = np.sum(thrusts) / self.config['mass']
         rotation_matrix = self.rotation_matrix(euler_angles)
-
-        return np.dot(rotation_matrix, force_z_body) - np.array([0, 0, self.config['gravity']])
+        force_body = np.array([0, 0, force_z_body])
+        return np.dot(rotation_matrix, force_body) - np.array([0, 0, self.config['gravity']])
 
     def angular_acceleration(self, omega, thrust):
         """Compute the angular acceleration in body frame
