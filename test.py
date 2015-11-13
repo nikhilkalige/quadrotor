@@ -1,9 +1,6 @@
 from quadcopter_model import Quadcopter
-import numpy as np
-from matplotlib import pyplot
-from matplotlib import animation
-from mpl_toolkits import mplot3d
 from plotter import PlotFlight
+import numpy as np
 
 
 def generate_flip_sections(mass, Ixx, length, Bup, Bdown, Cpmax, Cn, gravity):
@@ -59,4 +56,4 @@ quad = Quadcopter()
 # Should Cpmax be 1800deg/s or (np.pi * 1800 / 180) rad/s
 sections = generate_flip_sections(0.468, 0.0023, 0.17, 21.58, 3.92, (np.pi * 1800/180), 3, 9.806)
 state = quad.update_state(sections)
-PlotFlight(state)
+PlotFlight(state, 0.17).show()
