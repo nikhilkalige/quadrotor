@@ -1,50 +1,13 @@
+import multiprocessing
 from quadcopter_model import Quadcopter
 from plotter import PlotFlight
 import numpy as np
-import array
 import random
 import time
-import copy
-from deap import base, creator, benchmarks, tools, algorithms, cma
-
-random.seed()
+from deap import base, creator, tools, algorithms, cma
 
 
-def generate_flip_sections(mass, Ixx, length, Bup, Bdown, Cpmax, Cn, gravity):
-    """Generate parameters for multiflip action"""
-    sections = np.zeros(5, dtype='object')
-    p0 = p3 = 0.9 * Bup
-    # p1 = p4 = gravity * (T2 + T3 + T4) / (2 * p0)
-    p1 = p4 = 0.1
-
-    ap = {
-        'acc': (-mass * length * (Bup - p0) / (4 * Ixx)),
-        'start': (mass * length * (Bup - Bdown) / (4 * Ixx)),
-        'coast': 0,
-        'stop': (-mass * length * (Bup - Bdown) / (4 * Ixx)),
-        'recover': (mass * length * (Bup - p3) / (4 * Ixx)),
-    }
-
-    T2 = (Cpmax - p1 * ap['acc']) / ap['start']
-    T4 = -(Cpmax + p4 * ap['recover']) / ap['stop']
-    p2 = T3 = (2 * np.pi * Cn / Cpmax) - (Cpmax / ap['start'])
-
-    aq = 0
-    ar = 0
-
-    # 1. Accelerate
-    sections[0] = (mass * p0, [ap['acc'], aq, ar], p1)
-
-    temp = mass * Bup - 2 * abs(ap['start']) * Ixx / length
-    sections[1] = (temp, [ap['start'], aq, ar], T2)
-
-    sections[2] = (mass * Bdown, [ap['coast'], aq, ar], p2)
-
-    temp = mass * Bup - 2 * abs(ap['stop']) * Ixx / length
-    sections[3] = (temp, [ap['stop'], aq, ar], T4)
-
-    sections[4] = (mass * p3, [ap['recover'], aq, ar], p4)
-    return sections
+TURNS = 3
 
 
 class MultiFlipParams(object):
@@ -55,7 +18,7 @@ class MultiFlipParams(object):
         self.Bup = 21.58
         self.Bdown = 3.92
         self.Cpmax = np.pi * 1800/180
-        self.Cn = 3
+        self.Cn = TURNS
         self.gravity = 9.806
 
     def get_acceleration(self, p0, p3):
@@ -102,75 +65,82 @@ class MultiFlipParams(object):
         return sections
 
 
-ideal_final_state = np.array([0, 0, 0, 0, 0, 0, 2 * np.pi * 3, 0, 0])
+
+ideal_final_state = np.array([0, 0, 0, 0, 0, 0, 2 * np.pi * TURNS, 0, 0])
 
 
 def cmaes_evaluate(params):
     """5 dimensional variables[p0 ..... p5]"""
     gen = MultiFlipParams()
     quad = Quadcopter()
-    print "cmaes_evaluate"
+    # print "cmaes_evaluate"
     sections = gen.get_sections(params)
     for sect in sections:
         if sect[2] < 0:
-            print 'Error sect:', sect
-            return [-100] * 9
+            # print 'Error sect:', sect
+            return tuple([1000000] * 9)
 
     quad.update_state(sections)
     final_state = np.array([quad.state['position'],
                             quad.state['velocity'],
                             quad.state['orientation']]).flatten()
     fitness = abs(ideal_final_state - final_state)
-    print "[", params, "] -> [", fitness, "]"
-    return fitness
+    # print "[", params, "] -> [", fitness, "]"
+    return tuple(fitness)
 
 
-###################################################
-# Test Multi flips
-###################################################
-def test1():
-    quad = Quadcopter()
-    # Should Cpmax be 1800deg/s or (np.pi * 1800 / 180) rad/s
-    sections = generate_flip_sections(0.468, 0.0023, 0.17, 21.58, 3.92, (np.pi * 1800/180), 3, 9.806)
-    state = quad.update_state(sections)
-    PlotFlight(state, 0.17).show()
-
-
-def test2():
+def fly_quadrotor(params=None):
     gen = MultiFlipParams()
     quad = Quadcopter()
-    params = gen.get_initial_parameters()
+    if not params:
+        params = gen.get_initial_parameters()
     sections = gen.get_sections(params)
     state = quad.update_state(sections)
     PlotFlight(state, 0.17).show()
 
-# test1()
-# test2()
 
-###################################################
-# CMAES
-###################################################
+def run_cmaes():
+    # search_space_dims = 5
+    gen = MultiFlipParams()
+    random.seed()
 
-search_space_dims = 5
-# The fitness function should minimize all the 5 variables
-random.seed()
-creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0, -1.0, -1.0, -1.0,))
-creator.create("Individual", list, fitness=creator.FitnessMin)
-toolbox = base.Toolbox()
-toolbox.register("evaluate", cmaes_evaluate)
-cma_es = cma.Strategy(centroid=[5.0]*search_space_dims, sigma=5.0, lambda_=5*search_space_dims)
-toolbox.register("generate", cma_es.generate, creator.Individual)
-toolbox.register("update", cma_es.update)
+    print 'Init params:', gen.get_initial_parameters()
+    # The fitness function should minimize all the 9 variables
+    creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -0.1, -1.0, -1.0))
+    creator.create("Individual", list, fitness=creator.FitnessMin)
 
-hof = tools.HallOfFame(1)
-stats = tools.Statistics(lambda ind: ind.fitness.values)
-stats.register("avg", np.mean)
-stats.register("std", np.std)
-stats.register("min", np.min)
-stats.register("max", np.max)
+    pool = multiprocessing.Pool(2)
+    toolbox = base.Toolbox()
+    toolbox.register("evaluate", cmaes_evaluate)
+    toolbox.register("map", pool.map)
 
-# The CMA-ES algorithm converge with good probability with those settings
-pop, logbook = algorithms.eaGenerateUpdate(toolbox, ngen=60, stats=stats,
-                                           halloffame=hof, verbose=False)
+    cma_es = cma.Strategy(centroid=gen.get_initial_parameters(), sigma=3)
+    toolbox.register("generate", cma_es.generate, creator.Individual)
+    toolbox.register("update", cma_es.update)
 
-print("Best individual is %s, fitness: %s" % (hof[0], hof[0].fitness.values))
+    hof = tools.HallOfFame(1)
+    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    stats.register("avg", np.mean)
+    stats.register("std", np.std)
+    stats.register("min", np.min)
+    stats.register("max", np.max)
+
+    start = time.time()
+    # The CMA-ES algorithm converge with good probability with those settings
+    pop, logbook = algorithms.eaGenerateUpdate(toolbox, ngen=60, stats=stats,
+                                               halloffame=hof, verbose=False)
+
+    print("Best individual is %s, fitness: %s" % (hof[0], hof[0].fitness.values))
+    print("Elapsed %s minutes" % ((time.time() - start)/60.0))
+
+    # Fly the quadrotor with generated params
+    fly_quadrotor(hof[0])
+
+
+
+#########
+# test functions
+########
+
+fly_quadrotor()
+#run_cmaes()
