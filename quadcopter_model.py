@@ -190,7 +190,8 @@ class Quadcopter(object):
         for section in piecewise_args:
             (coll_thrust, desired_angular_acc, t) = section
             if t < (2 * self._dt):
-                raise ValueError('t=%s is less than (2 * self._dt)=%s' % (t, self._dt))
+                # raise ValueError('t=%s is less than (2 * self._dt)=%s' % (t, self._dt))
+                continue
 
             ts = np.arange(0, t, self._dt)
             state = np.concatenate((self.state['position'], self.state['velocity'],
@@ -203,11 +204,11 @@ class Quadcopter(object):
              self.state['orientation'], self.state['ang_velocity']] = np.split(output[output_length - 1], 4)
 
             # Update the final state
-            final_state[index:(index + output_length)] = output
+            # final_state[index:(index + output_length)] = output
             # Update the index to one less than current length, because the
             # first state is equal to the final state of previous section
             index = index + output_length - 1
-            print self.state
+            # print self.state
 
         return final_state
 

@@ -1,6 +1,13 @@
 from quadcopter_model import Quadcopter
 from plotter import PlotFlight
 import numpy as np
+import array
+import random
+import time
+import copy
+from deap import base, creator, benchmarks, tools, algorithms, cma
+
+random.seed()
 
 
 def generate_flip_sections(mass, Ixx, length, Bup, Bdown, Cpmax, Cn, gravity):
@@ -102,13 +109,20 @@ def cmaes_evaluate(params):
     """5 dimensional variables[p0 ..... p5]"""
     gen = MultiFlipParams()
     quad = Quadcopter()
-
+    print "cmaes_evaluate"
     sections = gen.get_sections(params)
+    for sect in sections:
+        if sect[2] < 0:
+            print 'Error sect:', sect
+            return [-100] * 9
+
     quad.update_state(sections)
     final_state = np.array([quad.state['position'],
                             quad.state['velocity'],
                             quad.state['orientation']]).flatten()
-    return ideal_final_state - final_state
+    fitness = abs(ideal_final_state - final_state)
+    print "[", params, "] -> [", fitness, "]"
+    return fitness
 
 
 ###################################################
@@ -130,5 +144,33 @@ def test2():
     state = quad.update_state(sections)
     PlotFlight(state, 0.17).show()
 
-#test1()
-test2()
+# test1()
+# test2()
+
+###################################################
+# CMAES
+###################################################
+
+search_space_dims = 5
+# The fitness function should minimize all the 5 variables
+random.seed()
+creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0, -1.0, -1.0, -1.0,))
+creator.create("Individual", list, fitness=creator.FitnessMin)
+toolbox = base.Toolbox()
+toolbox.register("evaluate", cmaes_evaluate)
+cma_es = cma.Strategy(centroid=[5.0]*search_space_dims, sigma=5.0, lambda_=5*search_space_dims)
+toolbox.register("generate", cma_es.generate, creator.Individual)
+toolbox.register("update", cma_es.update)
+
+hof = tools.HallOfFame(1)
+stats = tools.Statistics(lambda ind: ind.fitness.values)
+stats.register("avg", np.mean)
+stats.register("std", np.std)
+stats.register("min", np.min)
+stats.register("max", np.max)
+
+# The CMA-ES algorithm converge with good probability with those settings
+pop, logbook = algorithms.eaGenerateUpdate(toolbox, ngen=60, stats=stats,
+                                           halloffame=hof, verbose=False)
+
+print("Best individual is %s, fitness: %s" % (hof[0], hof[0].fitness.values))
