@@ -1,0 +1,5 @@
+numpy
+scipy
+deap
+matplotlib
+mpl_toolkits
