@@ -181,7 +181,7 @@ class Quadcopter(object):
 
         overall_length = len(np.arange(0, overall_time, self._dt)) - (len(piecewise_args) - 1)
         # Allocate space for storing state of all sections
-        final_state = np.zeros([overall_length, 12])
+        final_state = np.zeros([overall_length + 100, 12])
 
         # Create variable to maintain state between integration steps
         self._euler_dot = np.zeros(3)
