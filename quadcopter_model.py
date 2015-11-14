@@ -4,7 +4,14 @@ from scipy.integrate import odeint
 
 class Quadcopter(object):
 
-    def __init__(self, config={}):
+    def __init__(self, save_state=True, config={}):
+        """
+        Parameters
+        ----------
+        save_state: Boolean
+            Decides whether the state of the system should be saved
+            and returned at the end
+        """
         self.config = {
             # Constants
             'gravity': 9.806,  # Earth gravity [m s^-2]
@@ -17,6 +24,7 @@ class Quadcopter(object):
             'thrustToDrag': 0.016  # thrust to drag constant [m]
         }
 
+        self.save_state = save_state
         self._dt = 0.001  # seconds
         self.config.update(config)
         self.initialize_state()
@@ -175,13 +183,16 @@ class Quadcopter(object):
                 Time for which this section should run and should be atleast twice
                 self._dt
         """
-        overall_time = 0
-        for section in piecewise_args:
-            overall_time += section[2]
+        if self.save_state:
+            overall_time = 0
+            for section in piecewise_args:
+                overall_time += section[2]
 
-        overall_length = len(np.arange(0, overall_time, self._dt)) - (len(piecewise_args) - 1)
-        # Allocate space for storing state of all sections
-        final_state = np.zeros([overall_length + 100, 12])
+            overall_length = len(np.arange(0, overall_time, self._dt)) - (len(piecewise_args) - 1)
+            # Allocate space for storing state of all sections
+            final_state = np.zeros([overall_length + 100, 12])
+        else:
+            final_state = []
 
         # Create variable to maintain state between integration steps
         self._euler_dot = np.zeros(3)
@@ -203,12 +214,13 @@ class Quadcopter(object):
             [self.state['position'], self.state['velocity'],
              self.state['orientation'], self.state['ang_velocity']] = np.split(output[output_length - 1], 4)
 
-            # Update the final state
-            # final_state[index:(index + output_length)] = output
-            # Update the index to one less than current length, because the
-            # first state is equal to the final state of previous section
-            index = index + output_length - 1
-            # print self.state
+            if self.save_state:
+                # Update the final state
+                final_state[index:(index + output_length)] = output
+
+                # Update the index to one less than current length, because the
+                # first state is equal to the final state of previous section
+                index = index + output_length - 1
 
         return final_state
 

@@ -72,7 +72,7 @@ ideal_final_state = np.array([0, 0, 0, 0, 0, 0, 2 * np.pi * TURNS, 0, 0])
 def cmaes_evaluate(params):
     """5 dimensional variables[p0 ..... p5]"""
     gen = MultiFlipParams()
-    quad = Quadcopter()
+    quad = Quadcopter(False)
     # print "cmaes_evaluate"
     sections = gen.get_sections(params)
     for sect in sections:
