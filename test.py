@@ -106,7 +106,7 @@ def run_cmaes():
 
     print 'Init params:', gen.get_initial_parameters()
     # The fitness function should minimize all the 9 variables
-    creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -0.1, -1.0, -1.0))
+    creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0))
     creator.create("Individual", list, fitness=creator.FitnessMin)
 
     pool = multiprocessing.Pool(2)
@@ -114,7 +114,7 @@ def run_cmaes():
     toolbox.register("evaluate", cmaes_evaluate)
     toolbox.register("map", pool.map)
 
-    cma_es = cma.Strategy(centroid=gen.get_initial_parameters(), sigma=3)
+    cma_es = cma.Strategy(centroid=gen.get_initial_parameters(), sigma=3, lambda_=5)
     toolbox.register("generate", cma_es.generate, creator.Individual)
     toolbox.register("update", cma_es.update)
 
@@ -142,5 +142,5 @@ def run_cmaes():
 # test functions
 ########
 
-fly_quadrotor()
-#run_cmaes()
+#fly_quadrotor()
+run_cmaes()
