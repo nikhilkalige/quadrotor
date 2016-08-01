@@ -256,7 +256,7 @@ def run_cmaes():
 
 
 def load_data(f):
-    data = f.readline().strip("[]").split(",")
+    data = f.readline().strip().strip("[]").split(",")
     return [float(i) for i in data]
 
 
@@ -266,7 +266,7 @@ if __name__ == '__main__':
                         help="Parameters file to generate output")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--fly", action='store_true',
-                       help="Plot the flight using the initial parameters")
+                       help="Plot the flight")
     group.add_argument("--cmaes", action='store_true',
                        help="Run cmaes optimization")
     group.add_argument("--blender", action='store_true',
@@ -275,7 +275,7 @@ if __name__ == '__main__':
 
     params = None
     if args.f:
-        params = load_data(data)
+        params = load_data(args.f)
 
     if params and len(params) != 5:
         params = None
