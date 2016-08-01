@@ -6,6 +6,8 @@ import random
 import time
 from deap import base, creator, tools, algorithms, cma
 import argparse
+from matplotlib import pyplot
+
 
 TURNS = 3
 
@@ -69,7 +71,6 @@ class MultiFlipParams(object):
         return sections
 
 
-
 ideal_final_state = np.array([0, 0, 0, 0, 0, 0, 2 * np.pi * TURNS, 0, 0])
 
 
@@ -77,7 +78,10 @@ def cmaes_evaluate(params):
     """5 dimensional variables[p0 ..... p5]"""
     gen = MultiFlipParams()
     quad = Quadcopter(False)
-
+    # print("cmaes_evaluate")
+    # Restrict duration of generated params to below 2 seconds
+    if (params[1] > 2.5) or (params[2] > 2.5) or (params[4] > 2.5):
+        return tuple([1000000] * 9)
     sections = gen.get_sections(params)
     for sect in sections:
         if sect[2] < 0:
@@ -103,43 +107,150 @@ def fly_quadrotor(params=None):
     PlotFlight(state, 0.17).show()
 
 
+class PlotCMAES(object):
+    graph_lengths = [9, 5, 9, 9]
+    titles = [
+        'Std Deviation - fitness (NGEN)',
+        'Parameters (NGEN)',
+        'Fitness (Current Gen)',
+        'Fitness (NGEN)'
+    ]
+    xlabel = ['No. Generations', 'No. Generations', 'No. Children', 'No. Generations']
+    labels = [
+        ['x', 'y', 'z', 'xdot', 'ydot', 'zdot', 'phi', 'theta', 'psi'],
+        ['Facc', 'Tacc', 'Tcoa', 'Frec', 'Trec']
+    ]
+    markers = [
+        ['-', '-', '-', '--', '--', '--', '-.', '-.', '-.'],
+        ['-', '-.', '-', '-.', '-']
+    ]
+
+    def __init__(self, ngen, children):
+        self.fig, self.axis_arr = pyplot.subplots(2, 2)
+        self.axis_arr = self.axis_arr.flatten()
+        self.lines = [[] for _ in xrange(4)]
+
+        for i, length in enumerate(self.graph_lengths):
+            label = self.labels[1] if i == 1 else self.labels[0]
+            marker = self.markers[1] if i == 1 else self.markers[0]
+            for j in xrange(length):
+                self.lines[i].append(self.axis_arr[i].plot([], [],
+                                                           label=label[j],
+                                                           linewidth=3,
+                                                           linestyle=marker[j])[0])
+
+        for i, axis in enumerate(self.axis_arr):
+            axis.grid(True)
+            axis.set_title(self.titles[i])
+            axis.set_xlabel(self.xlabel[i])
+            axis.legend(loc='upper right')
+
+        self.axis_arr[0].set_yscale('symlog')
+        self.axis_arr[2].set_yscale('symlog')
+        self.axis_arr[3].set_yscale('symlog')
+
+        for i in [0, 1, 3]:
+            self.axis_arr[i].set_autoscaley_on(True)
+            self.axis_arr[i].set_xlim(0, ngen)
+
+        self.axis_arr[2].set_autoscaley_on(True)
+        self.axis_arr[2].set_xlim(0, children)
+
+        pyplot.grid(True)
+        pyplot.ion()
+        pyplot.show()
+
+    def update(self, plot1, plot2, plot3, plot4):
+        data = [plot1, plot2, plot3, plot4]
+        xlen = [plot1.shape[0], len(plot2), plot3.shape[0], plot1.shape[0]]
+        for i in xrange(4):
+            # print 'I', i, xlen
+            # print data[i]
+            for line, y in zip(self.lines[i], data[i].T):
+                line.set_ydata(y)
+                line.set_xdata(range(xlen[i]))
+
+        for i in xrange(4):
+            self.axis_arr[i].relim()
+            self.axis_arr[i].autoscale_view()
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+
 def run_cmaes():
     # search_space_dims = 5
+    NGEN = 1000
+    CHILD = 6
+    SIGMA = 1
+    verbose = True
+
     gen = MultiFlipParams()
+    cmplot = PlotCMAES(NGEN, CHILD)
     random.seed()
 
+    best_params = np.ndarray((NGEN, 5))
+    best_fitness = np.ndarray((NGEN, 9))
+
     print('Init params:', gen.get_initial_parameters())
+
     # The fitness function should minimize all the 9 variables
     creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0, -1.0, -1.0, -1.0,
                                                         -1.0, -1.0, -1.0, -1.0))
     creator.create("Individual", list, fitness=creator.FitnessMin)
 
-    pool = multiprocessing.Pool(2)
+    pool = multiprocessing.Pool(3)
     toolbox = base.Toolbox()
     toolbox.register("evaluate", cmaes_evaluate)
     toolbox.register("map", pool.map)
 
-    cma_es = cma.Strategy(centroid=gen.get_initial_parameters(), sigma=3, lambda_=5)
+    cma_es = cma.Strategy(centroid=gen.get_initial_parameters(), sigma=SIGMA, lambda_=CHILD)
     toolbox.register("generate", cma_es.generate, creator.Individual)
     toolbox.register("update", cma_es.update)
 
     hof = tools.HallOfFame(1)
     stats = tools.Statistics(lambda ind: ind.fitness.values)
-    stats.register("avg", np.mean)
-    stats.register("std", np.std)
-    stats.register("min", np.min)
-    stats.register("max", np.max)
+    # stats.register("avg", np.mean, axis=0)
+    stats.register("std", np.std, axis=0)
+    stats.register("min", np.min, axis=0)
+    stats.register("max", np.max, axis=0)
 
     start = time.time()
-    # The CMA-ES algorithm converge with good probability with those settings
-    pop, logbook = algorithms.eaGenerateUpdate(toolbox, ngen=60, stats=stats,
-                                               halloffame=hof, verbose=False)
+
+    # Since we are doing addtional work like plotting, implement the
+    # algorithm.eaGenerateUpdate part yourself
+    logbook = tools.Logbook()
+    # logbook.header = ['gen'] + stats.fields
+    logbook.header = ['gen']
+
+    for gen in range(NGEN):
+        population = toolbox.generate()
+        fitnesses = toolbox.map(toolbox.evaluate, population)
+        for ind, fit in zip(population, fitnesses):
+            ind.fitness.values = fit
+
+        toolbox.update(population)
+        hof.update(population)
+        record = stats.compile(population)
+        logbook.record(evals=len(population), gen=gen, **record)
+        if verbose:
+            print(logbook.stream)
+
+        plot1 = np.asarray(logbook.select("std"))
+        # Holds the best parameter set for each generation
+        best_params[gen] = hof[0]
+        # Fitness of current population
+        plot3 = np.asarray([ind.fitness.values for ind in population])
+        # Fitness of best population over all generations
+        best_fitness[gen] = hof[0].fitness.values
+        cmplot.update(plot1, best_params[:gen+1], plot3, best_fitness[:gen+1])
 
     print("Best individual is %s, fitness: %s" % (hof[0], hof[0].fitness.values))
     print("Elapsed %s minutes" % ((time.time() - start)/60.0))
 
+    pyplot.show(True)
     # Fly the quadrotor with generated params
     fly_quadrotor(hof[0])
+    pyplot.show(True)
 
 
 if __name__ == '__main__':
@@ -156,5 +267,7 @@ if __name__ == '__main__':
 # test functions
 ########
 
-#fly_quadrotor()
+fly_quadrotor([21.121387297202805, 0.32869509982898087, 0.37702365595718668, 19.259836565302734, 0.039891912366817384])
+# fly_quadrotor()
+# print '\n\n\n Running CMAES'
 # run_cmaes()

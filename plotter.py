@@ -41,7 +41,8 @@ class PlotFlight(object):
 
         # initialize the plot
         flight_path, = self.ax.plot([], [], [], '--')
-        arms = [self.ax.plot([], [], [], c='r', marker='^')[0] for _ in range(4)]
+        colors = ['r', 'g', 'b', 'y']
+        arms = [self.ax.plot([], [], [], c=colors[i], marker='^')[0] for i in range(4)]
         self.plot_artists = [flight_path, arms]
 
     def rotate(self, euler_angles, point):

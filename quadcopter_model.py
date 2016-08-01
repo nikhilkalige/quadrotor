@@ -184,13 +184,13 @@ class Quadcopter(object):
                 self._dt
         """
         if self.save_state:
-            overall_time = 0
+            overall_length = 0
             for section in piecewise_args:
-                overall_time += section[2]
+                overall_length += np.ceil(section[2] / self._dt)
 
-            overall_length = len(np.arange(0, overall_time, self._dt)) - (len(piecewise_args) - 1)
+            overall_length = overall_length - (len(piecewise_args) - 1)
             # Allocate space for storing state of all sections
-            final_state = np.zeros([overall_length + 100, 12])
+            final_state = np.zeros([overall_length, 12])
         else:
             final_state = []
 
