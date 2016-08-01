@@ -12,6 +12,76 @@ from matplotlib import pyplot
 TURNS = 3
 
 
+class PlotCMAES(object):
+    graph_lengths = [9, 5, 9, 9]
+    titles = [
+        'Std Deviation - fitness (NGEN)',
+        'Parameters (NGEN)',
+        'Fitness (Current Gen)',
+        'Fitness (NGEN)'
+    ]
+    xlabel = ['No. Generations', 'No. Generations', 'No. Children', 'No. Generations']
+    labels = [
+        ['x', 'y', 'z', 'xdot', 'ydot', 'zdot', 'phi', 'theta', 'psi'],
+        ['Facc', 'Tacc', 'Tcoa', 'Frec', 'Trec']
+    ]
+    markers = [
+        ['-', '-', '-', '--', '--', '--', '-.', '-.', '-.'],
+        ['-', '-.', '-', '-.', '-']
+    ]
+
+    def __init__(self, ngen, children):
+        self.fig, self.axis_arr = pyplot.subplots(2, 2)
+        self.axis_arr = self.axis_arr.flatten()
+        self.lines = [[] for _ in xrange(4)]
+
+        for i, length in enumerate(self.graph_lengths):
+            label = self.labels[1] if i == 1 else self.labels[0]
+            marker = self.markers[1] if i == 1 else self.markers[0]
+            for j in xrange(length):
+                self.lines[i].append(self.axis_arr[i].plot([], [],
+                                                           label=label[j],
+                                                           linewidth=3,
+                                                           linestyle=marker[j])[0])
+
+        for i, axis in enumerate(self.axis_arr):
+            axis.grid(True)
+            axis.set_title(self.titles[i])
+            axis.set_xlabel(self.xlabel[i])
+            axis.legend(loc='upper right')
+
+        self.axis_arr[0].set_yscale('symlog')
+        self.axis_arr[2].set_yscale('symlog')
+        self.axis_arr[3].set_yscale('symlog')
+
+        for i in [0, 1, 3]:
+            self.axis_arr[i].set_autoscaley_on(True)
+            self.axis_arr[i].set_xlim(0, ngen)
+
+        self.axis_arr[2].set_autoscaley_on(True)
+        self.axis_arr[2].set_xlim(0, children)
+
+        pyplot.grid(True)
+        pyplot.ion()
+        pyplot.show()
+
+    def update(self, plot1, plot2, plot3, plot4):
+        data = [plot1, plot2, plot3, plot4]
+        xlen = [plot1.shape[0], len(plot2), plot3.shape[0], plot1.shape[0]]
+        for i in xrange(4):
+            # print 'I', i, xlen
+            # print data[i]
+            for line, y in zip(self.lines[i], data[i].T):
+                line.set_ydata(y)
+                line.set_xdata(range(xlen[i]))
+
+        for i in xrange(4):
+            self.axis_arr[i].relim()
+            self.axis_arr[i].autoscale_view()
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+
 class MultiFlipParams(object):
     """Generates the parameters for CMA-ES according to the paper."""
     def __init__(self):
@@ -97,84 +167,16 @@ def cmaes_evaluate(params):
     return tuple(fitness)
 
 
-def fly_quadrotor(params=None):
+def fly_quadrotor(params=None, fly=True):
     gen = MultiFlipParams()
     quad = Quadcopter()
     if not params:
         params = gen.get_initial_parameters()
     sections = gen.get_sections(params)
     state = quad.update_state(sections)
-    PlotFlight(state, 0.17).show()
-
-
-class PlotCMAES(object):
-    graph_lengths = [9, 5, 9, 9]
-    titles = [
-        'Std Deviation - fitness (NGEN)',
-        'Parameters (NGEN)',
-        'Fitness (Current Gen)',
-        'Fitness (NGEN)'
-    ]
-    xlabel = ['No. Generations', 'No. Generations', 'No. Children', 'No. Generations']
-    labels = [
-        ['x', 'y', 'z', 'xdot', 'ydot', 'zdot', 'phi', 'theta', 'psi'],
-        ['Facc', 'Tacc', 'Tcoa', 'Frec', 'Trec']
-    ]
-    markers = [
-        ['-', '-', '-', '--', '--', '--', '-.', '-.', '-.'],
-        ['-', '-.', '-', '-.', '-']
-    ]
-
-    def __init__(self, ngen, children):
-        self.fig, self.axis_arr = pyplot.subplots(2, 2)
-        self.axis_arr = self.axis_arr.flatten()
-        self.lines = [[] for _ in xrange(4)]
-
-        for i, length in enumerate(self.graph_lengths):
-            label = self.labels[1] if i == 1 else self.labels[0]
-            marker = self.markers[1] if i == 1 else self.markers[0]
-            for j in xrange(length):
-                self.lines[i].append(self.axis_arr[i].plot([], [],
-                                                           label=label[j],
-                                                           linewidth=3,
-                                                           linestyle=marker[j])[0])
-
-        for i, axis in enumerate(self.axis_arr):
-            axis.grid(True)
-            axis.set_title(self.titles[i])
-            axis.set_xlabel(self.xlabel[i])
-            axis.legend(loc='upper right')
-
-        self.axis_arr[0].set_yscale('symlog')
-        self.axis_arr[2].set_yscale('symlog')
-        self.axis_arr[3].set_yscale('symlog')
-
-        for i in [0, 1, 3]:
-            self.axis_arr[i].set_autoscaley_on(True)
-            self.axis_arr[i].set_xlim(0, ngen)
-
-        self.axis_arr[2].set_autoscaley_on(True)
-        self.axis_arr[2].set_xlim(0, children)
-
-        pyplot.grid(True)
-        pyplot.ion()
-        pyplot.show()
-
-    def update(self, plot1, plot2, plot3, plot4):
-        data = [plot1, plot2, plot3, plot4]
-        xlen = [plot1.shape[0], len(plot2), plot3.shape[0], plot1.shape[0]]
-        for i in xrange(4):
-            # print 'I', i, xlen
-            # print data[i]
-            for line, y in zip(self.lines[i], data[i].T):
-                line.set_ydata(y)
-                line.set_xdata(range(xlen[i]))
-
-        for i in xrange(4):
-            self.axis_arr[i].relim()
-            self.axis_arr[i].autoscale_view()
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
+    if fly:
+        PlotFlight(state, 0.17).show()
+    return state
 
 
 def run_cmaes():
