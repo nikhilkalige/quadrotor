@@ -255,21 +255,38 @@ def run_cmaes():
     pyplot.show(True)
 
 
+def load_data(f):
+    data = f.readline().strip("[]").split(",")
+    return [float(i) for i in data]
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Quadcopter multiflips")
+    parser.add_argument("-f", nargs="?", type=argparse.FileType('r'),
+                        help="Parameters file to generate output")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--fly", action='store_true',
                        help="Plot the flight using the initial parameters")
     group.add_argument("--cmaes", action='store_true',
                        help="Run cmaes optimization")
+    group.add_argument("--blender", action='store_true',
+                       help="Generate data for blender")
     args = parser.parse_args()
-    print(args)
 
-#########
-# test functions
-########
+    params = None
+    if args.f:
+        params = load_data(data)
 
-fly_quadrotor([21.121387297202805, 0.32869509982898087, 0.37702365595718668, 19.259836565302734, 0.039891912366817384])
-# fly_quadrotor()
-# print '\n\n\n Running CMAES'
-# run_cmaes()
+    if params and len(params) != 5:
+        params = None
+
+    if args.fly:
+        fly_quadrotor(params)
+
+    if args.cmaes:
+        run_cmaes()
+
+    if args.blender:
+        state = fly_quadrotor(params, fly=False)
+        np.save("quadata", state)
+        print("Output save to quadata.npy")

@@ -3,9 +3,6 @@ import numpy as np
 import math
 
 
-# def blender_render():
-
-
 def generate_animation(data, frame_divisor, muliplier=50):
     data_length = data.shape[0]
     no_frames = data_length / frame_divisor
@@ -56,6 +53,5 @@ def generate_animation(data, frame_divisor, muliplier=50):
         cur_frame += 1
 
 
-state = np.load('/home/lonewolf/Desktop/quaddata.npy')
-# generate_animation(state, 50)
+state = np.load('./quaddata.npy')
 generate_animation(state, 6, 75)
