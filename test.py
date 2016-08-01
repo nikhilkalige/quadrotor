@@ -5,12 +5,13 @@ import numpy as np
 import random
 import time
 from deap import base, creator, tools, algorithms, cma
-
+import argparse
 
 TURNS = 3
 
 
 class MultiFlipParams(object):
+    """Generates the parameters for CMA-ES according to the paper."""
     def __init__(self):
         self.mass = 0.468
         self.Ixx = 0.0023
@@ -22,6 +23,7 @@ class MultiFlipParams(object):
         self.gravity = 9.806
 
     def get_acceleration(self, p0, p3):
+        """Compute the acceleration from the generated parameters."""
         ap = {
             'acc': (-self.mass * self.length * (self.Bup - p0) / (4 * self.Ixx)),
             'start': (self.mass * self.length * (self.Bup - self.Bdown) / (4 * self.Ixx)),
@@ -32,6 +34,7 @@ class MultiFlipParams(object):
         return ap
 
     def get_initial_parameters(self):
+        """Initial parameters."""
         p0 = p3 = 0.9 * self.Bup
         p1 = p4 = 0.1
         acc_start = self.get_acceleration(p0, p3)['start']
@@ -39,6 +42,7 @@ class MultiFlipParams(object):
         return [p0, p1, p2, p3, p4]
 
     def get_sections(self, parameters):
+        """Compute the 5 regions of the flight as defined in the paper."""
         sections = np.zeros(5, dtype='object')
         [p0, p1, p2, p3, p4] = parameters
 
@@ -73,11 +77,11 @@ def cmaes_evaluate(params):
     """5 dimensional variables[p0 ..... p5]"""
     gen = MultiFlipParams()
     quad = Quadcopter(False)
-    # print "cmaes_evaluate"
+
     sections = gen.get_sections(params)
     for sect in sections:
         if sect[2] < 0:
-            # print 'Error sect:', sect
+            # print('Error sect:', sect)
             return tuple([1000000] * 9)
 
     quad.update_state(sections)
@@ -85,7 +89,7 @@ def cmaes_evaluate(params):
                             quad.state['velocity'],
                             quad.state['orientation']]).flatten()
     fitness = abs(ideal_final_state - final_state)
-    # print "[", params, "] -> [", fitness, "]"
+    # print("[", params, "] -> [", fitness, "]")
     return tuple(fitness)
 
 
@@ -104,9 +108,10 @@ def run_cmaes():
     gen = MultiFlipParams()
     random.seed()
 
-    print 'Init params:', gen.get_initial_parameters()
+    print('Init params:', gen.get_initial_parameters())
     # The fitness function should minimize all the 9 variables
-    creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0))
+    creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0, -1.0, -1.0, -1.0,
+                                                        -1.0, -1.0, -1.0, -1.0))
     creator.create("Individual", list, fitness=creator.FitnessMin)
 
     pool = multiprocessing.Pool(2)
@@ -137,10 +142,19 @@ def run_cmaes():
     fly_quadrotor(hof[0])
 
 
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Quadcopter multiflips")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--fly", action='store_true',
+                       help="Plot the flight using the initial parameters")
+    group.add_argument("--cmaes", action='store_true',
+                       help="Run cmaes optimization")
+    args = parser.parse_args()
+    print(args)
 
 #########
 # test functions
 ########
 
 #fly_quadrotor()
-run_cmaes()
+# run_cmaes()

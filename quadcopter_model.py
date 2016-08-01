@@ -82,7 +82,7 @@ class Quadcopter(object):
         """
         force_z_body = np.sum(thrusts) / self.config['mass']
         rotation_matrix = self.rotation_matrix(euler_angles)
-        # print rotation_matrix
+        # print(rotation_matrix)
         force_body = np.array([0, 0, force_z_body])
         return np.dot(rotation_matrix, force_body) - np.array([0, 0, self.config['gravity']])
 
@@ -262,8 +262,8 @@ class Quadcopter(object):
         euler_dot = self.angular_velocity_to_dt_eulerangles(omega, euler)
         self._euler_dot = euler_dot
         # [velocity : acc : euler_dot : omega_dot]
-        # print 'Vel', velocity
-        # print 'Acc', acc
-        # print 'Euler dot', euler_dot
-        # print 'omdega dot', omega_dot
+        # print('Vel', velocity)
+        # print('Acc', acc)
+        # print('Euler dot', euler_dot)
+        # print('omdega dot', omega_dot)
         return np.concatenate((velocity, acc, euler_dot, omega_dot))
