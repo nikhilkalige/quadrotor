@@ -19,8 +19,8 @@ optional arguments:
   --cmaes     Run cmaes optimization
   --blender   Generate data for blender
  
---fly and --blender take a file as an argument that can be used to provide optimized parameters (Ex: example.params). If the
-file is not provided default initial parameters will be used.
+--fly and --blender take a file as an argument that can be used to provide optimized parameters (Ex: example.params).
+If the file is not provided default initial parameters will be used.
 ```
 ### Matplotlib Plot
 Using `--fly` will generate a matplotlib animated plot as below
